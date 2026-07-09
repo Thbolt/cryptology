@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Standalone Cipher App</title>
+    <!-- PyScript CSS and JS -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.3/core.css" />
+    <script type="module" src="https://pyscript.net/releases/2024.1.3/core.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+        h1 {
+            text-align: center;
+            color: #0056b3;
+            margin-bottom: 1.5rem;
+        }
+        .form-group { margin-bottom: 1rem; }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 1.5rem;
+        }
+        button {
+            flex-grow: 1;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button.encrypt { background-color: #28a745; }
+        button.encrypt:hover { background-color: #218838; }
+        button.decrypt { background-color: #dc3545; }
+        button.decrypt:hover { background-color: #c82333; }
+        .output-area { margin-top: 1.5rem; }
+        #output_text {
+            background-color: #e9ecef;
+            padding: 1rem;
+            border-radius: 5px;
+            min-height: 50px;
+            word-wrap: break-word;
+            font-family: "Courier New", Courier, monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Cipher Implementation</h1>
+
+        <div class="form-group">
+            <label for="input_text">Enter Text</label>
+            <input type="text" id="input_text" placeholder="Your text here...">
+        </div>
+
+        <div class="form-group">
+            <label for="secret_key">Secret Key</label>
+            <input type="text" id="secret_key" placeholder="Your key here...">
+        </div>
+
+        <div class="form-group">
+            <label for="cipher">Choose Cipher</label>
+            <select id="cipher">
+                <option value="Caesar">Caesar</option>
+                <option value="Vigenere">Vigenère</option>
+                <option value="Railfence">Railfence</option>
+                <option value="Columnar">Columnar Transposition</option>
+            </select>
+        </div>
+
+        <div class="button-group">
+            <button id="encrypt-btn" class="encrypt">Encrypt</button>
+            <button id="decrypt-btn" class="decrypt">Decrypt</button>
+        </div>
+
+        <div class="output-area">
+            <label>Output:</label>
+            <p id="output_text"></p>
+        </div>
+    </div>
+
+    <!-- All Python code is now embedded directly in the HTML file -->
+    <py-script>
+        from pyscript import document, when
+
+        # --- Helper Functions ---
+        def _get_rail_pattern(text_len, key):
+            """A generator that yields the rail index for each character in a zigzag pattern."""
+            if key <= 1:
+                for _ in range(text_len):
+                    yield 0
+                return
+
+            row, direction = 0, 1
+            for _ in range(text_len):
+                yield row
+                if row == 0:
+                    direction = 1
+                elif row == key - 1:
+                    direction = -1
+                row += direction
+        
+        # --- Cipher Implementations ---
+
+        def caesar(text, key, mode):
+            """Encrypts or decrypts text using the Caesar cipher."""
+            try:
+                key = int(key)
+            except (ValueError, TypeError):
+                return "Error: Caesar key must be an integer."
+
+            if mode == 'decrypt':
+                key = -key
+
+            result = ""
+            for char in text:
+                if 'a' <= char <= 'z':
+                    result += chr((ord(char) - ord('a') + key) % 26 + ord('a'))
+                elif 'A' <= char <= 'Z':
+                    result += chr((ord(char) - ord('A') + key) % 26 + ord('A'))
+                else:
+                    result += char
+            return result
+
+        def vigenere(text, key, mode):
+            """Encrypts or decrypts text using the Vigenère cipher."""
+            key = "".join(filter(str.isalpha, key)).upper()
+            if not key:
+                return "Error: Vigenere key must contain letters."
+
+            result = ""
+            key_index = 0
+            for char in text:
+                if char.isalpha():
+                    base = ord('a') if 'a' <= char <= 'z' else ord('A')
+                    key_char_offset = ord(key[key_index % len(key)]) - ord('A')
+
+                    if mode == 'decrypt':
+                        key_char_offset = -key_char_offset
+
+                    result += chr((ord(char) - base + key_char_offset) % 26 + base)
+                    key_index += 1
+                else:
+                    result += char
+            return result
+
+        def railfence_encrypt(text, key):
+            """Encrypts text using the Railfence cipher."""
+            try:
+                key = int(key)
+            except (ValueError, TypeError):
+                return "Error: Railfence key must be an integer."
+
+            if key <= 1: return text
+
+            rails = [''] * key
+            for char, row in zip(text, _get_rail_pattern(len(text), key)):
+                rails[row] += char
+            return "".join(rails)
+
+        def railfence_decrypt(cipher, key):
+            """Decrypts text from the Railfence cipher."""
+            try:
+                key = int(key)
+            except (ValueError, TypeError):
+                return "Error: Railfence key must be an integer."
+
+            if key <= 1: return cipher
+
+            text_len = len(cipher)
+            rail_lengths = [0] * key
+            for row in _get_rail_pattern(text_len, key):
+                rail_lengths[row] += 1
+
+            rails, start = [], 0
+            for length in rail_lengths:
+                rails.append(cipher[start : start + length])
+                start += length
+
+            result = []
+            rail_indices = [0] * key
+            for row in _get_rail_pattern(text_len, key):
+                result.append(rails[row][rail_indices[row]])
+                rail_indices[row] += 1
+
+            return "".join(result)
+
+        # --- Main Controller Logic (Refactored) ---
+
+        def _process(mode):
+            """Core logic to run the selected cipher."""
+            try:
+                output_element = document.getElementById("output_text")
+                text = document.getElementById("input_text").value
+                key = document.getElementById("secret_key").value
+                cipher_type = document.getElementById("cipher").value
+
+                if not text.strip() or not key.strip():
+                    output_element.innerText = "Please enter both text and a secret key."
+                    return
+
+                output = ""
+                if cipher_type == "Caesar":
+                    output = caesar(text, key, mode)
+                elif cipher_type == "Vigenere":
+                    output = vigenere(text, key, mode)
+                elif cipher_type == "Railfence":
+                    if mode == 'encrypt':
+                        output = railfence_encrypt(text, key)
+                    else:
+                        output = railfence_decrypt(text, key)
+                elif cipher_type == "Columnar":
+                    output = "Columnar Transposition is not yet implemented."
+
+                output_element.innerText = output
+            except Exception as e:
+                error_message = f"An unexpected error occurred: {e}"
+                document.getElementById("output_text").innerText = error_message
+                print(f"ERROR: {e}")
+
+        # --- Event Handlers ---
+        @when("click", selector="#encrypt-btn")
+        def encrypt_handler(event):
+            _process(mode='encrypt')
+
+        @when("click", selector="#decrypt-btn")
+        def decrypt_handler(event):
+            _process(mode='decrypt')
+    </py-script>
+</body>
+
+</html>
